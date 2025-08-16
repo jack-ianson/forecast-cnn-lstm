@@ -45,7 +45,7 @@ class WeatherDataset(Dataset):
         """
         x = self.data[index : index + self.t]
 
-        y = self.data[index + self.t + self.forecast_t - 1]
+        y = self.data[index + self.t + self.forecast_t - 1, 0, :, :]
 
         x_datetimes = self.datetimes[index : index + self.t]
         y_datetimes = self.datetimes[index + self.t + self.forecast_t - 1]

@@ -31,7 +31,7 @@ def load_monthly_data(paths: list[str]):
 
     time_steps = [str(ts) for ts in time_steps]
 
-    return stacked_data, time_steps
+    return stacked_data.float(), time_steps
 
 
 def load_h5_data(file_path: str, dataset_name: str) -> tuple[np.ndarray, dict]:

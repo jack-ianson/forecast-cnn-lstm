@@ -1,11 +1,12 @@
 import torch
 from torch.utils.data import DataLoader
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 from forecast import dataset, ForecastCNN
 
 
-stacked_data, datetimes = dataset.load_monthly_data(
+data, datetimes = dataset.load_monthly_data(
     paths=[
         r"data\jan_2023\data_0_5_spacing.h5",
         r"data\feb_2023\data_0_5_spacing.h5",
@@ -15,19 +16,17 @@ stacked_data, datetimes = dataset.load_monthly_data(
 )
 
 
-data = stacked_data.permute(
-    0, 2, 1, 3
-)  # Change shape to (time_steps, channels, height, width)
-
+data = data.permute(0, 3, 1, 2)  # Change to (time, channels, height, width)
 print(f"Data shape after permute: {data.shape}")
 
 
-dataset = dataset.WeatherDataset(data, datetimes=datetimes, t=24, forecast_t=12)
-
-print(f"Dataset length: {len(dataset)}")
+training_dataset = dataset.WeatherDataset(data, datetimes=datetimes, t=24, forecast_t=1)
 
 
-x, y, x_time, y_time = dataset[0]
+print(f"Dataset length: {len(training_dataset)}")
+
+
+x, y, x_time, y_time = training_dataset[0]
 
 
 print(f"Input shape: {x.shape}, Target shape: {y.shape}")
@@ -35,7 +34,7 @@ print(f"Input shape: {x.shape}, Target shape: {y.shape}")
 print(f"Input datetimes: {x_time}, Target datetime: {y_time}")
 
 
-dataloader = DataLoader(dataset, batch_size=8, shuffle=True)
+dataloader = DataLoader(training_dataset, batch_size=512, shuffle=True, drop_last=True)
 
 
 batch = next(iter(dataloader))
@@ -43,33 +42,72 @@ inputs, targets, input_times, target_times = batch
 print(f"Batch inputs shape: {inputs.shape}")
 print(f"Batch targets shape: {targets.shape}")
 
-# cnn = ForecastCNN(
-#     input_channels=len(meta_data["categories"]), input_image_shape=(26, 26)
-# )
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
-# print(f"Data shape: {data.shape}")
+cnn = ForecastCNN(input_channels=data.shape[-3], input_image_shape=(28, 28)).to(device)
 
-# six_hours = torch.tensor(data[:6, :, 2:, :]).float().unsqueeze(0)  # Add batch dimension
+mse = torch.nn.MSELoss()
+optimizer = torch.optim.Adam(cnn.parameters(), lr=0.001)
 
-# print(f"Six hours shape: {six_hours.shape}")
+epochs = 500
 
-# # change the shape to (batch_size, time_steps, channels, height, width)
-# six_hours = six_hours.permute(0, 1, 4, 2, 3)
+losses = []
 
-# print(f"Input shape: {six_hours.shape}")
+for epoch in tqdm(range(epochs), desc="Training Epochs"):
+    epoch_loss = []
+    for batch in tqdm(
+        dataloader,
+        desc="Training Batches",
+        leave=False,
+        total=len(dataloader),
+        unit="batch",
+    ):
+        inputs, targets, input_times, target_times = batch
 
-# output = cnn(six_hours)
+        inputs = inputs.to(device)
+        targets = targets.to(device)
+        outputs = cnn(inputs)
 
-# print(f"Output shape: {output.shape}")
+        loss = mse(outputs, targets.unsqueeze(1))  # Adjust target shape if necessary
+        optimizer.zero_grad()
+        loss.backward()
 
+        optimizer.step()
 
-# fig, ax = plt.subplots(1, 7, figsize=(20, 3))
+        epoch_loss.append(loss.detach().cpu().item())
 
-# for i in range(6):
-#     ax[i].imshow(six_hours[0, i, 0, :, :].detach().numpy(), cmap="viridis")
-#     ax[i].set_title(f"Hour {i + 1}")
-#     ax[i].axis("off")
+    losses.append(sum(epoch_loss) / len(epoch_loss))
 
-# ax[6].imshow(output[0, 0, :, :].detach().numpy(), cmap="viridis")
+    if epoch % 10 == 0:
+        with torch.no_grad():
+            sample_inputs, sample_targets, _, _ = next(iter(dataloader))
+            sample_inputs = sample_inputs.to(device)
+            sample_targets = sample_targets.to(device)
+            sample_outputs = cnn(sample_inputs)
 
-# plt.show()
+            # Select first sample in batch for visualization
+            idx = 0
+            target_img = sample_targets[idx].cpu().squeeze().numpy()
+            pred_img = sample_outputs[idx].cpu().squeeze().numpy()
+            diff_img = pred_img - target_img
+
+            fig, axs = plt.subplots(1, 3, figsize=(12, 4))
+            axs[0].imshow(target_img, cmap="viridis")
+            axs[0].set_title("Target")
+            axs[1].imshow(pred_img, cmap="viridis")
+            axs[1].set_title("Prediction")
+            axs[2].imshow(diff_img, cmap="bwr")
+            axs[2].set_title("Difference")
+            for ax in axs:
+                ax.axis("off")
+            plt.suptitle(f"Epoch {epoch+1}")
+            plt.savefig(f"results/t_plus_1/epoch_{epoch+1}.png")
+            plt.close(fig)
+
+    plt.plot(losses)
+    plt.xlabel("Epochs")
+    plt.ylabel("Loss")
+    plt.yscale("log")
+    plt.title("Training Loss")
+    plt.savefig("results/t_plus_1/training_loss.png")
+    plt.close()

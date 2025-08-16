@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 
 class ForecastCNN(nn.Module):
-    def __init__(self, input_channels: int, input_image_shape: tuple = (26, 26)):
+    def __init__(self, input_channels: int, input_image_shape: tuple = (28, 28)):
         super(ForecastCNN, self).__init__()
 
         self.cnn = nn.Sequential(
@@ -28,15 +28,16 @@ class ForecastCNN(nn.Module):
             batch_first=True,
         )
 
-        self.fc = nn.Linear(128, 64 * 6 * 6)
+        self.fc = nn.Linear(128, 64 * 7 * 7)
 
         self.decoder_cnn = nn.Sequential(
             nn.ConvTranspose2d(64, 32, kernel_size=3, padding=1),
             nn.ReLU(),
             nn.Upsample(scale_factor=2, mode="nearest"),
-            nn.ConvTranspose2d(32, 1, kernel_size=3, padding=1),
+            nn.ConvTranspose2d(32, 16, kernel_size=3, padding=1),
             nn.ReLU(),
             nn.Upsample(scale_factor=2, mode="nearest"),
+            nn.ConvTranspose2d(16, 1, kernel_size=3, padding=1),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -47,7 +48,6 @@ class ForecastCNN(nn.Module):
 
         for i in range(t):
             features = self.cnn(x[:, i])
-            print(f"Features shape at time {i}: {features.shape}")
             features = features.reshape((b, -1))
             cnn_features.append(features)
 
@@ -59,7 +59,7 @@ class ForecastCNN(nn.Module):
 
         output = self.fc(lstm_out)  #
 
-        output = output.view(b, 64, 6, 6)
+        output = output.view(b, 64, 7, 7)
 
         output = self.decoder_cnn(output)
 
