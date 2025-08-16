@@ -1,32 +1,47 @@
-import torch  #
+import torch
+from torch.utils.data import DataLoader
 import matplotlib.pyplot as plt
 
-from forecast import ForecastCNN, load_h5_data, WeatherDataset
+from forecast import dataset, ForecastCNN
 
 
-PATH = r"data\data_0_5_spacing.h5"
+stacked_data, datetimes = dataset.load_monthly_data(
+    paths=[
+        r"data\jan_2023\data_0_5_spacing.h5",
+        r"data\feb_2023\data_0_5_spacing.h5",
+        r"data\mar_2023\data_0_5_spacing.h5",
+        r"data\april_2023\data_0_5_spacing.h5",
+    ]
+)
 
 
-data, meta_data = load_h5_data(PATH, "data")
-
-
-data = torch.tensor(data).float()
-
-data = data.permute(0, 2, 1, 3)  # Change shape to (time_steps, channels, height, width)
+data = stacked_data.permute(
+    0, 2, 1, 3
+)  # Change shape to (time_steps, channels, height, width)
 
 print(f"Data shape after permute: {data.shape}")
 
 
-dataset = WeatherDataset(data, t=8, forecast_t=4)
+dataset = dataset.WeatherDataset(data, datetimes=datetimes, t=24, forecast_t=12)
 
 print(f"Dataset length: {len(dataset)}")
 
 
-x, y = dataset[0]
+x, y, x_time, y_time = dataset[0]
 
 
 print(f"Input shape: {x.shape}, Target shape: {y.shape}")
 
+print(f"Input datetimes: {x_time}, Target datetime: {y_time}")
+
+
+dataloader = DataLoader(dataset, batch_size=8, shuffle=True)
+
+
+batch = next(iter(dataloader))
+inputs, targets, input_times, target_times = batch
+print(f"Batch inputs shape: {inputs.shape}")
+print(f"Batch targets shape: {targets.shape}")
 
 # cnn = ForecastCNN(
 #     input_channels=len(meta_data["categories"]), input_image_shape=(26, 26)

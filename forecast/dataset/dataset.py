@@ -4,7 +4,13 @@ from torch.utils.data import Dataset
 
 
 class WeatherDataset(Dataset):
-    def __init__(self, data: torch.Tensor, t: int = 24, forecast_t: int = 8):
+    def __init__(
+        self,
+        data: torch.Tensor,
+        datetimes: list[str] = None,
+        t: int = 24,
+        forecast_t: int = 8,
+    ):
         """
         Initializes the WeatherDataset with the provided data.
 
@@ -14,6 +20,7 @@ class WeatherDataset(Dataset):
             forecast_t (int): The time to the forecast.
         """
         self.data = data
+        self.datetimes = datetimes
         self.t = t
         self.forecast_t = forecast_t
 
@@ -38,6 +45,14 @@ class WeatherDataset(Dataset):
         """
         x = self.data[index : index + self.t]
 
-        y = self.data[index + self.t + self.forecast_t]
+        y = self.data[index + self.t + self.forecast_t - 1]
 
-        return x, y
+        x_datetimes = self.datetimes[index : index + self.t]
+        y_datetimes = self.datetimes[index + self.t + self.forecast_t - 1]
+
+        return (
+            x,
+            y,
+            x_datetimes,
+            y_datetimes,
+        )

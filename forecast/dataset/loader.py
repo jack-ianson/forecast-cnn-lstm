@@ -29,6 +29,8 @@ def load_monthly_data(paths: list[str]):
 
     stacked_data = torch.cat(data_list, dim=0)
 
+    time_steps = [str(ts) for ts in time_steps]
+
     return stacked_data, time_steps
 
 
