@@ -2,6 +2,18 @@ import requests
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
+import h5py
+
+
+def load_h5_data(file_path: str, dataset_name: str) -> tuple[np.ndarray, dict]:
+
+    with h5py.File(file_path, "r") as f:
+
+        dataset = f[dataset_name]
+        data = dataset[:]
+
+        metadata = {key: dataset.attrs[key] for key in dataset.attrs.keys()}
+    return data, metadata
 
 
 def fetch_weather_data(

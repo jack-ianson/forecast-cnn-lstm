@@ -1,24 +1,42 @@
-# import matplotlib.pyplot as plt
+import torch  #
+import matplotlib.pyplot as plt
 
-# from backend import get_grid_data
-
-
-# OPEN_METEO_URL = "https://archive-api.open-meteo.com/v1/archive"
+from forecast import ForecastCNN, load_h5_data
 
 
-# data = get_grid_data(
-#     url=OPEN_METEO_URL,
-#     latitude_range=(50.0, 59.0),
-#     longitude_range=(-8.0, 2.0),
-#     start_date="2023-01-01",
-#     end_date="2023-02-01",
-#     categories=["temperature_2m", "precipitation"],
-#     spacing=0.4,
-# )
+PATH = r"data\data_0_5_spacing.h5"
 
 
-# fig, ax = plt.subplots()
+data, meta_data = load_h5_data(PATH, "data")
 
-# ax.imshow(data[0, :, :, 0])
 
-# plt.show()
+cnn = ForecastCNN(
+    input_channels=len(meta_data["categories"]), input_image_shape=(26, 26)
+)
+
+print(f"Data shape: {data.shape}")
+
+six_hours = torch.tensor(data[:6, :, 2:, :]).float().unsqueeze(0)  # Add batch dimension
+
+print(f"Six hours shape: {six_hours.shape}")
+
+# change the shape to (batch_size, time_steps, channels, height, width)
+six_hours = six_hours.permute(0, 1, 4, 2, 3)
+
+print(f"Input shape: {six_hours.shape}")
+
+output = cnn(six_hours)
+
+print(f"Output shape: {output.shape}")
+
+
+fig, ax = plt.subplots(1, 7, figsize=(20, 3))
+
+for i in range(6):
+    ax[i].imshow(six_hours[0, i, 0, :, :].detach().numpy(), cmap="viridis")
+    ax[i].set_title(f"Hour {i + 1}")
+    ax[i].axis("off")
+
+ax[6].imshow(output[0, 0, :, :].detach().numpy(), cmap="viridis")
+
+plt.show()
