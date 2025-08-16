@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 import h5py
+import warnings
 
 
 def load_h5_data(file_path: str, dataset_name: str) -> tuple[np.ndarray, dict]:
@@ -30,9 +31,23 @@ def fetch_weather_data(
     }
 
     response = requests.get(url, params=params)
+
+    if response.status_code == 429:
+        warnings.warn(
+            "Rate limit exceeded. Please try again later or reduce the number of requests."
+        )
+        return pd.DataFrame(columns=categories)
+
     data = response.json()
 
-    return pd.DataFrame(data["hourly"]).set_index("time").astype(float)
+    try:
+        return pd.DataFrame(data["hourly"]).set_index("time").astype(float)
+    except KeyError:
+        warnings.warn(
+            f"Data for coordinates {coords} not found in the response. "
+            "Check if the coordinates are valid or if the data is available."
+        )
+        return pd.DataFrame(columns=categories)
 
 
 def get_grid_data(
@@ -52,7 +67,7 @@ def get_grid_data(
 
     test = fetch_weather_data(
         url=url,
-        coords=(1.0, 1.0),
+        coords=(latitudes[0], longitudes[0]),
         start_date=start_date,
         end_date=end_date,
         categories=categories,
@@ -60,13 +75,15 @@ def get_grid_data(
 
     num_hours = len(test)
 
-    data = np.zeros((num_hours, len(latitudes), len(longitudes), len(categories)))
+    data = np.zeros((num_hours, len(longitudes), len(latitudes), len(categories)))
 
     pb = tqdm(
         total=len(latitudes) * len(longitudes),
         desc=f"Fetching data",
         unit="grid point",
     )
+
+    failed_coords = []
 
     for i, lat in enumerate(latitudes):
         for j, lon in enumerate(longitudes):
@@ -77,8 +94,17 @@ def get_grid_data(
                 end_date=end_date,
                 categories=categories,
             )
-            data[:, i, j] = df[categories].values
+            if df.empty:
+                warnings.warn(
+                    f"No data found for coordinates ({lat}, {lon}) in the specified date range."
+                )
+
+                data[:, i, j] = np.zeros((num_hours, len(categories)))
+                failed_coords.append((lat, lon))
+            else:
+
+                data[:, i, j] = df[categories].values
 
             pb.update(1)
 
-    return data
+    return data, failed_coords
