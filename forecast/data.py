@@ -29,7 +29,7 @@ def get_grid_data(
     longitude_range: tuple,
     start_date: str,
     end_date: str,
-    category: str,
+    categories: str,
     spacing: float = 0.1,
 ) -> np.ndarray:
 
@@ -43,19 +43,18 @@ def get_grid_data(
         coords=(1.0, 1.0),
         start_date=start_date,
         end_date=end_date,
-        categories=[category],
+        categories=categories,
     )
 
     num_hours = len(test)
 
-    data = np.zeros((num_hours, len(latitudes), len(longitudes)))
+    data = np.zeros((num_hours, len(latitudes), len(longitudes), len(categories)))
 
     pb = tqdm(
         total=len(latitudes) * len(longitudes),
-        desc=f"Fetching data for {category}",
+        desc=f"Fetching data",
         unit="grid point",
     )
-    pb.set_postfix({"Category": category})
 
     for i, lat in enumerate(latitudes):
         for j, lon in enumerate(longitudes):
@@ -64,9 +63,9 @@ def get_grid_data(
                 coords=(lat, lon),
                 start_date=start_date,
                 end_date=end_date,
-                categories=[category],
+                categories=categories,
             )
-            data[:, i, j] = df[category].values
+            data[:, i, j] = df[categories].values
 
             pb.update(1)
 
