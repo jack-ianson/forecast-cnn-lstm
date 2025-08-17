@@ -8,11 +8,13 @@ class ForecastCNN(nn.Module):
         super(ForecastCNN, self).__init__()
 
         self.cnn = nn.Sequential(
-            nn.Conv2d(input_channels, 32, kernel_size=3, padding=1),
-            nn.ReLU(),
+            nn.Conv2d(input_channels, 16, kernel_size=3, padding=1),
+            nn.BatchNorm2d(16),
+            nn.GELU(),
             nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.Conv2d(32, 64, kernel_size=3, padding=1),
-            nn.ReLU(),
+            nn.Conv2d(16, 32, kernel_size=3, padding=1),
+            nn.BatchNorm2d(32),
+            nn.GELU(),
             nn.MaxPool2d(kernel_size=2, stride=2),
         )
 
@@ -23,12 +25,17 @@ class ForecastCNN(nn.Module):
 
         self.lstm = nn.LSTM(
             input_size=output_shape,
-            hidden_size=128,
-            num_layers=1,
+            hidden_size=64,
+            num_layers=2,
             batch_first=True,
         )
 
-        self.fc = nn.Linear(128, 64 * 7 * 7)
+        self.fc_layers = nn.Sequential(
+            nn.Linear(64, 128),
+            nn.GELU(),
+            nn.Dropout(0.5),
+            nn.Linear(128, 64 * 7 * 7),
+        )
 
         self.decoder_cnn = nn.Sequential(
             nn.ConvTranspose2d(64, 32, kernel_size=3, padding=1),
@@ -57,7 +64,7 @@ class ForecastCNN(nn.Module):
 
         lstm_out = lstm_out[:, -1, :]  # Take the last time step output
 
-        output = self.fc(lstm_out)  #
+        output = self.fc_layers(lstm_out)  #
 
         output = output.view(b, 64, 7, 7)
 
