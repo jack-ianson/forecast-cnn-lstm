@@ -1,2 +1,2 @@
-from .modules import ForecastCNN
 from . import dataset
+from . import modules
