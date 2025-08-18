@@ -12,16 +12,16 @@ EPOCHS = 100
 
 training_data, training_datetimes = dataset.load_monthly_data(
     paths=[
-        r"data\jan_2023\data_0_5_spacing.h5",
-        r"data\feb_2023\data_0_5_spacing.h5",
-        r"data\mar_2023\data_0_5_spacing.h5",
-        r"data\april_2023\data_0_5_spacing.h5",
+        r"data\training\jan_2023\data_0_5_spacing.h5",
+        r"data\training\feb_2023\data_0_5_spacing.h5",
+        r"data\training\mar_2023\data_0_5_spacing.h5",
+        r"data\training\april_2023\data_0_5_spacing.h5",
     ]
 )
 
 testing_data, testing_datetimes = dataset.load_monthly_data(
     paths=[
-        r"data\sept_2023\data_0_5_spacing.h5",
+        r"data\validation\sept_2023\data_0_5_spacing.h5",
     ]
 )
 
@@ -55,8 +55,8 @@ cnn = ForecastCNN(
     input_channels=training_data.shape[-3], input_image_shape=(28, 28)
 ).to(device)
 
-mse = torch.nn.L1Loss()
-optimizer = torch.optim.Adam(cnn.parameters(), lr=0.0001)
+mse = torch.nn.MSELoss()
+optimizer = torch.optim.AdamW(cnn.parameters(), lr=0.0005)
 
 
 train_loss = torch.zeros(EPOCHS, device=device)

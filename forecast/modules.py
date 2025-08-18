@@ -30,6 +30,8 @@ class ForecastCNN(nn.Module):
             batch_first=True,
         )
 
+        self.attention = nn.MultiheadAttention(embed_dim=64, num_heads=4)
+
         self.fc_layers = nn.Sequential(
             nn.Linear(64, 128),
             nn.GELU(),
@@ -61,6 +63,8 @@ class ForecastCNN(nn.Module):
         cnn_features = torch.stack(cnn_features, dim=1)
 
         lstm_out, _ = self.lstm(cnn_features)
+
+        lstm_out, _ = self.attention(lstm_out, lstm_out, lstm_out)
 
         lstm_out = lstm_out[:, -1, :]  # Take the last time step output
 
