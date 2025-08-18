@@ -4,13 +4,13 @@ from torch.utils.data import DataLoader
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 
-from forecast import dataset, ForecastCNN
+from forecast import datasets, modules
 
 
 BATCH_SIZE = 128
 EPOCHS = 100
 
-training_data, training_datetimes = dataset.load_monthly_data(
+training_data, training_datetimes = datasets.load_monthly_data(
     paths=[
         r"data\training\jan_2023\data_0_5_spacing.h5",
         r"data\training\feb_2023\data_0_5_spacing.h5",
@@ -19,7 +19,7 @@ training_data, training_datetimes = dataset.load_monthly_data(
     ]
 )
 
-testing_data, testing_datetimes = dataset.load_monthly_data(
+testing_data, testing_datetimes = datasets.load_monthly_data(
     paths=[
         r"data\validation\sept_2023\data_0_5_spacing.h5",
     ]
@@ -31,10 +31,24 @@ training_data = training_data.permute(
 )  # Change to (time, channels, height, width)
 testing_data = testing_data.permute(0, 3, 1, 2)
 
-training_dataset = dataset.WeatherDataset(
+
+# compute the min and max of each feature in the dataset
+min_values = training_data.amin(dim=(0, 2, 3))
+max_values = training_data.amax(dim=(0, 2, 3))
+
+# Normalize the data
+training_data = (training_data - min_values[None, :, None, None]) / (
+    max_values - min_values
+)[None, :, None, None]
+testing_data = (testing_data - min_values[None, :, None, None]) / (
+    max_values - min_values
+)[None, :, None, None]
+
+
+training_dataset = datasets.WeatherDataset(
     training_data, datetimes=training_datetimes, t=24, forecast_t=1
 )
-testing_dataset = dataset.WeatherDataset(
+testing_dataset = datasets.WeatherDataset(
     testing_data, datetimes=testing_datetimes, t=24, forecast_t=1
 )
 
@@ -51,7 +65,7 @@ test_dataloader = DataLoader(
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-cnn = ForecastCNN(
+cnn = modules.ForecastCNN(
     input_channels=training_data.shape[-3], input_image_shape=(28, 28)
 ).to(device)
 
@@ -165,7 +179,7 @@ for epoch in tqdm(range(EPOCHS), desc="Training Epochs"):
             ax[1, 1].axis("off")
             ax[1, 2].axis("off")
             fig.tight_layout()
-            fig.savefig(f"results/t_plus_1_testing_2/epoch_{epoch+1}.png")
+            fig.savefig(f"results/t_plus_t_transformed/epoch_{epoch+1}.png")
             plt.close()
 
     plt.plot(train_loss[: epoch + 1].cpu(), label="Training Loss")
@@ -175,5 +189,5 @@ for epoch in tqdm(range(EPOCHS), desc="Training Epochs"):
     plt.ylabel("Loss")
     plt.yscale("log")
     plt.title("Training Loss")
-    plt.savefig("results/t_plus_1_testing_2/training_loss.png")
+    plt.savefig("results/t_plus_t_transformed/training_loss.png")
     plt.close()
