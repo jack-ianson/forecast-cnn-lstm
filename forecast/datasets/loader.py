@@ -29,6 +29,9 @@ def load_monthly_data(paths: list[str]):
 
     stacked_data = torch.cat(data_list, dim=0)
 
+    # permute to (time, channels, height, width)
+    stacked_data = stacked_data.permute(0, 3, 1, 2)
+
     time_steps = [str(ts) for ts in time_steps]
 
     return stacked_data.float(), time_steps
