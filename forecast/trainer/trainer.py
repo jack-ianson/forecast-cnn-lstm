@@ -1,11 +1,15 @@
+import numpy as np
 import torch.nn as nn
 import torch
 from torch import Tensor
+import torch.nn.functional as F
 import warnings
-import typing
+from pathlib import Path
 from tqdm import tqdm
+import matplotlib.pyplot as plt
 
 from ..datasets import WeatherDataset
+
 
 _BatchType = tuple[Tensor, Tensor, list[str], list[str]]
 
@@ -100,20 +104,38 @@ class ForecastModelTrainer:
         # padding refers to the image pixels not to be predicted
         self.padding = padding
 
-    def train(self, epochs: int = 100):
+        # state of model for checkpointing
+        self._internal_state = {"current_epoch": 0, "total_epochs": 0}
+
+    def train(self, epochs: int = 100, checkpoint_epoch: int = None):
         """
         Train the model. Handles both training and testing based
         on the datasets passed to the __init__ method.
 
         Args:
             epochs (int, optional): The number of epochs to train for. Defaults to 100.
+            checkpoint_epoch (int, optional): Frequency of checkpointing
         """
+
+        self._internal_state["total_epochs"] = (
+            self._internal_state["total_epochs"] + epochs
+        )
+
         # create some storages for errors per epoch
-        train_loss = torch.zeros(epochs, device=self.device)
-        test_loss = torch.zeros(epochs, device=self.device)
+        if not hasattr(self, "training_loss"):
+            self.training_loss = torch.zeros(epochs, device=self.device)
+            self.testing_loss = torch.zeros(epochs, device=self.device)
+        else:
+            self.training_loss = F.pad(self.training_loss, (0, epochs))
+            self.testing_loss = F.pad(self.testing_loss, (0, epochs))
 
         for epoch in tqdm(
-            range(epochs), desc="Training...", total=epochs, unit="epochs"
+            range(epochs),
+            desc="Training...",
+            total=self._internal_state["total_epochs"],
+            initial=self._internal_state["current_epoch"],
+            unit="epochs",
+            leave=False,
         ):
             self.model.train()
 
@@ -125,7 +147,7 @@ class ForecastModelTrainer:
             for batch_idx, batch in enumerate(
                 tqdm(
                     self.train_dataloader,
-                    desc=f"Epoch {epoch+1}...",
+                    desc=f"Epoch {self._internal_state['current_epoch']+1}...",
                     unit="steps",
                     total=len(self.train_dataloader),
                     leave=False,
@@ -140,11 +162,19 @@ class ForecastModelTrainer:
 
                 epoch_train_loss[batch_idx] = loss.item()
 
-            train_loss[epoch] = epoch_train_loss.mean()
-            test_loss[epoch] = self.test(_epoch=epoch)
+            self.training_loss[self._internal_state["current_epoch"]] = (
+                epoch_train_loss.mean()
+            )
+            self.testing_loss[self._internal_state["current_epoch"]] = self.test(
+                _epoch=self._internal_state["current_epoch"]
+            )
 
-        self.training_loss = train_loss.cpu()
-        self.testing_loss = test_loss.cpu()
+            self._internal_state["current_epoch"] += 1
+
+        self.training_loss = self.training_loss.cpu()
+        self.testing_loss = self.testing_loss.cpu()
+
+        print(f"{self._internal_state['total_epochs']} epochs complete!")
 
     def test(self, _epoch: int = None) -> torch.Tensor:
         """
@@ -208,3 +238,94 @@ class ForecastModelTrainer:
         loss = self.criterion(outputs, targets)
 
         return loss
+
+    def save_model(self, path: Path | str) -> None:
+        """
+        Save the trained model.
+
+        Note: If intermediate model training state is required,
+        call `checkpoint` instead.
+
+        Args:
+            path (Path | str): Path to save the model to.
+        """
+        path = Path(path)
+
+        if path.is_dir():
+            path = path / "model.pt"
+
+        torch.save(self.model.state_dict(), path)
+
+    def save_checkpoint(self, path: Path | str) -> None:
+        """
+        Checkpoint a model, including model state, optimiser state,
+        current epoch and all previous training and testing loss
+        values.
+
+        Args:
+            path (Path | str): Path do save the model to.'
+            epoch (int): store the current epoch of the checkpoint
+        """
+        path = Path(path)
+
+        if path.is_dir():
+            path = path / f"checkpoint_{self._internal_state['current_epoch']}.pt"
+
+        checkpoint = {
+            "model_state_dict": self.model.state_dict(),
+            "optim_state_dict": self.optimiser.state_dict(),
+            "current_epoch": self._internal_state.get("current_epoch", 0),
+            "total_epochs": self._internal_state.get("total_epochs", 0),
+            "training_loss": getattr(self, "training_loss", None),
+            "testing_loss": getattr(self, "testing_loss", None),
+        }
+
+        torch.save(checkpoint, path)
+
+    def load_checkpoint(self, path: Path | str) -> None:
+        """
+        Load a model checkpoint to resume training
+
+        Args:
+            path (Path | str): Path of the checkpoint
+        """
+        path = Path(path)
+
+        checkpoint: dict = torch.load(path, map_location=self.device)
+
+        self.model.load_state_dict(checkpoint["model_state_dict"])
+        self.optimiser.load_state_dict(checkpoint["optim_state_dict"])
+        self._internal_state["current_epoch"] = checkpoint.get("current_epoch", 0)
+        self._internal_state["total_epochs"] = checkpoint.get("total_epochs", 0)
+        self.training_loss = checkpoint.get("training_loss", None)
+        self.testing_loss = checkpoint.get("testing_loss", None)
+
+        if self.training_loss is not None:
+            self.training_loss.to(self.device)
+            self.testing_loss.to(self.device)
+
+    def error_plot(self, path: Path | str) -> None:
+        """
+        Create an error plot for training and testing loss
+
+        Args:
+            path (Path | str): Path to save the image to
+        """
+        fig, ax = plt.subplots()
+
+        training_loss = self.training_loss.numpy()
+        testing_loss = self.testing_loss.numpy()
+
+        ax.plot(np.arange(1, len(training_loss) + 1), training_loss, label="Train")
+        ax.plot(np.arange(1, len(testing_loss) + 1), testing_loss, label="Test")
+        ax.legend()
+        ax.set_xlabel("Epochs")
+        ax.set_ylabel("Loss")
+        ax.set_yscale("log")
+        ax.set_title("Training Loss")
+        fig.savefig(path / "error_plot.png")
+        plt.close(fig)
+
+    @property
+    def trained_model(self) -> nn.Module:
+        return self.model
