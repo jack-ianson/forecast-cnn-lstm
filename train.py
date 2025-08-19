@@ -74,6 +74,7 @@ def main(
         criterion="mse",
         batch_size=batch_size,
         device=device,
+        results_path=results_path,
     )
 
     if checkpoint is not None:
@@ -86,7 +87,9 @@ def main(
 
     trainer.error_plot(path=results_path)
 
-    print(trainer._internal_state)
+    trainer.test_forecast(
+        path=results_path, min_temp=min_values[0].item(), max_temp=max_values[0].item()
+    )
 
 
 if __name__ == "__main__":

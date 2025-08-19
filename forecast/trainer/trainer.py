@@ -37,6 +37,7 @@ class ForecastModelTrainer:
         model: nn.Module,
         training_dataset: WeatherDataset,
         testing_dataset: WeatherDataset,
+        results_path: Path,
         device: torch.device | str = None,
         batch_size: int = 32,
         optimiser: torch.optim.Optimizer | str = "adam",
@@ -104,6 +105,9 @@ class ForecastModelTrainer:
         # padding refers to the image pixels not to be predicted
         self.padding = padding
 
+        # store results path
+        self.results_path = results_path
+
         # state of model for checkpointing
         self._internal_state = {"current_epoch": 0, "total_epochs": 0}
 
@@ -168,6 +172,12 @@ class ForecastModelTrainer:
             self.testing_loss[self._internal_state["current_epoch"]] = self.test(
                 _epoch=self._internal_state["current_epoch"]
             )
+
+            if self._internal_state["current_epoch"] % 10 == 0:
+                self.test_forecast(
+                    path=self.results_path,
+                    _epoch=self._internal_state["current_epoch"] + 1,
+                )
 
             self._internal_state["current_epoch"] += 1
 
@@ -324,6 +334,61 @@ class ForecastModelTrainer:
         ax.set_yscale("log")
         ax.set_title("Training Loss")
         fig.savefig(path / "error_plot.png")
+        plt.close(fig)
+
+    def test_forecast(
+        self,
+        path: Path | str,
+        min_temp: float = None,
+        max_temp: float = None,
+        _epoch: int = None,
+    ) -> None:
+
+        x, y, _, _ = self.testing_dataset[0]
+
+        with torch.no_grad():
+
+            x = x.to(self.device)
+            y = y.to(self.device)
+
+            output = self.model(x.unsqueeze(0))
+
+            target_img = y[0, 2:-2, 2:-2].cpu().numpy()
+            predicted_img = output[0, 0, 2:-2, 2:-2].cpu().numpy()
+
+            if min_temp is not None:
+                target_img = target_img * (max_temp - min_temp) + min_temp
+                predicted_img = predicted_img * (max_temp - min_temp) + min_temp
+
+            difference = predicted_img - target_img
+
+            fig, ax = plt.subplots(1, 3, figsize=(12, 4))
+
+            im_1 = ax[0].imshow(target_img, cmap="viridis")
+            ax[0].set_title("True Temperature")
+            cbar_1 = fig.colorbar(im_1, ax=ax[0])
+            cbar_1.set_label("°C")
+            ax[0].axis("off")
+
+            im_2 = ax[1].imshow(predicted_img, cmap="viridis")
+            ax[1].set_title("Predicted Temperature")
+            cbar_2 = fig.colorbar(im_2, ax=ax[1])
+            cbar_2.set_label("°C")
+            ax[1].axis("off")
+
+            im_3 = ax[2].imshow(difference, cmap="bwr")
+            ax[2].set_title("Difference")
+            cbar_3 = fig.colorbar(im_3, ax=ax[2])
+            cbar_3.set_label("°C")
+            ax[2].axis("off")
+
+        fig.tight_layout()
+
+        if _epoch is not None:
+            fig.savefig(path / f"test_forecast_{_epoch}.png")
+        else:
+            fig.savefig(path / "test_forecast.png")
+
         plt.close(fig)
 
     @property
