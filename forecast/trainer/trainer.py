@@ -173,13 +173,17 @@ class ForecastModelTrainer:
                 _epoch=self._internal_state["current_epoch"]
             )
 
-            if self._internal_state["current_epoch"] % 10 == 0:
+            self._internal_state["current_epoch"] += 1
+
+            if (
+                self._internal_state["current_epoch"] != 0
+                and (self._internal_state["current_epoch"]) % 10 == 0
+            ):
                 self.test_forecast(
                     path=self.results_path,
-                    _epoch=self._internal_state["current_epoch"] + 1,
+                    _epoch=self._internal_state["current_epoch"],
                 )
-
-            self._internal_state["current_epoch"] += 1
+                self.error_plot(path=self.results_path)
 
         self.training_loss = self.training_loss.cpu()
         self.testing_loss = self.testing_loss.cpu()
@@ -323,28 +327,38 @@ class ForecastModelTrainer:
         """
         fig, ax = plt.subplots()
 
-        training_loss = self.training_loss.numpy()
-        testing_loss = self.testing_loss.numpy()
+        training_loss = self.training_loss.cpu().numpy()
+        testing_loss = self.testing_loss.cpu().numpy()
 
-        ax.plot(np.arange(1, len(training_loss) + 1), training_loss, label="Train")
-        ax.plot(np.arange(1, len(testing_loss) + 1), testing_loss, label="Test")
+        ax.plot(
+            np.arange(1, self._internal_state["current_epoch"] + 1),
+            training_loss[: self._internal_state["current_epoch"]],
+            label="Train",
+        )
+        ax.plot(
+            np.arange(1, self._internal_state["current_epoch"] + 1),
+            testing_loss[: self._internal_state["current_epoch"]],
+            label="Test",
+        )
         ax.legend()
         ax.set_xlabel("Epochs")
-        ax.set_ylabel("Loss")
+        ax.set_ylabel("Mean Squared Error")
         ax.set_yscale("log")
         ax.set_title("Training Loss")
+
         fig.savefig(path / "error_plot.png")
         plt.close(fig)
 
     def test_forecast(
         self,
         path: Path | str,
+        index: int = 0,
         min_temp: float = None,
         max_temp: float = None,
         _epoch: int = None,
     ) -> None:
 
-        x, y, _, _ = self.testing_dataset[0]
+        x, y, _, _ = self.testing_dataset[index]
 
         with torch.no_grad():
 
@@ -387,7 +401,7 @@ class ForecastModelTrainer:
         if _epoch is not None:
             fig.savefig(path / f"test_forecast_{_epoch}.png")
         else:
-            fig.savefig(path / "test_forecast.png")
+            fig.savefig(path / f"test_forecast_testing_sample_{index}.png")
 
         plt.close(fig)
 

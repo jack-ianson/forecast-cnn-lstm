@@ -87,9 +87,15 @@ def main(
 
     trainer.error_plot(path=results_path)
 
-    trainer.test_forecast(
-        path=results_path, min_temp=min_values[0].item(), max_temp=max_values[0].item()
-    )
+    indices = [0, 3, 5, 16, 25, 305, 653, 1000]
+
+    for index in indices:
+        trainer.test_forecast(
+            path=results_path,
+            index=index,
+            min_temp=min_values[0].item(),
+            max_temp=max_values[0].item(),
+        )
 
 
 if __name__ == "__main__":
