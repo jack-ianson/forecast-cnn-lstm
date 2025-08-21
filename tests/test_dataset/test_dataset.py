@@ -5,7 +5,9 @@ from forecast import datasets
 
 
 def test_dataset():
-
+    """
+    Example test.
+    """
     dummy_data = torch.rand((100, 10, 28, 28))
     dummy_dates = torch.arange(0, 99)
 
