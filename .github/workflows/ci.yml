@@ -31,7 +31,6 @@ jobs:
           python -m pip install arrow
           python -m pip install black
           python -m pip install defusedxml
-          python -m pip install  -e git+https://github.com/jack-ianson/weather-app.git@ac5abf04ac0fa217ce01b91b0a5902aec2498715#egg=forecast
           python -m pip install h5py
           python -m pip install numpy
           python -m pip install pandas
