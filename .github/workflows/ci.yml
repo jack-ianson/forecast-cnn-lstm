@@ -26,8 +26,22 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install black pytest
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          python -m pip install black 
+          python -m pip install pytest
+          python -m pip install arrow
+          python -m pip install black
+          python -m pip install defusedxml
+          python -m pip install  -e git+https://github.com/jack-ianson/weather-app.git@ac5abf04ac0fa217ce01b91b0a5902aec2498715#egg=forecast
+          python -m pip install h5py
+          python -m pip install numpy
+          python -m pip install pandas
+          python -m pip install pytest
+          python -m pip install requests
+          python -m pip install setuptools
+          python -m pip install tqdm
+          python -m pip install xarray
+        run: pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+
       - name: Lint with black
         run: |
           source venv/bin/activate
