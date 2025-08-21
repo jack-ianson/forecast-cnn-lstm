@@ -87,7 +87,7 @@ def main(
 
     trainer.error_plot(path=results_path)
 
-    indices = [0, 3, 5, 16, 25, 305, 653, 1000]
+    indices = [0, 3, 5, 16, 25, 305, 653, 999]
 
     for index in indices:
         trainer.test_forecast(
