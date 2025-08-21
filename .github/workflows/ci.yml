@@ -40,7 +40,7 @@ jobs:
           python -m pip install tqdm
           python -m pip install xarray
           python -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
-
+          python -m pip install -e .
       - name: Test with pytest
         run: |
           pytest
